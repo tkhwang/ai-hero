@@ -4,14 +4,35 @@ import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
 import { useChat } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useState } from "react";
 
 interface ChatProps {
   userName: string;
 }
 
 export const ChatPage = ({ userName }: ChatProps) => {
+  const { data: session } = useSession();
+  const [showSignInModal, setShowSignInModal] = useState(false);
   const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useChat();
+    useChat({
+      onError: (error) => {
+        if (error.message.includes("401")) {
+          setShowSignInModal(true);
+        }
+      },
+    });
+
+  const isAuthenticated = !!session?.user;
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    if (!isAuthenticated) {
+      e.preventDefault();
+      setShowSignInModal(true);
+      return;
+    }
+    handleSubmit(e);
+  };
 
   return (
     <>
@@ -34,20 +55,27 @@ export const ChatPage = ({ userName }: ChatProps) => {
         </div>
 
         <div className="border-t border-gray-700">
-          <form onSubmit={handleSubmit} className="mx-auto max-w-[65ch] p-4">
+          <form
+            onSubmit={handleFormSubmit}
+            className="mx-auto max-w-[65ch] p-4"
+          >
             <div className="flex gap-2">
               <input
                 value={input}
                 onChange={handleInputChange}
-                placeholder="Say something..."
+                placeholder={
+                  isAuthenticated
+                    ? "Say something..."
+                    : "Sign in to start chatting..."
+                }
                 autoFocus
                 aria-label="Chat input"
                 className="flex-1 rounded border border-gray-700 bg-gray-800 p-2 text-gray-200 placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
-                disabled={isLoading}
+                disabled={isLoading || !isAuthenticated}
               />
               <button
                 type="submit"
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading || !input.trim() || !isAuthenticated}
                 className="flex items-center justify-center rounded bg-gray-700 px-4 py-2 text-white hover:bg-gray-600 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50 disabled:hover:bg-gray-700"
               >
                 {isLoading ? (
@@ -61,7 +89,10 @@ export const ChatPage = ({ userName }: ChatProps) => {
         </div>
       </div>
 
-      <SignInModal isOpen={false} onClose={() => {}} />
+      <SignInModal
+        isOpen={showSignInModal}
+        onClose={() => setShowSignInModal(false)}
+      />
     </>
   );
 };
